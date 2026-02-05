@@ -2,7 +2,7 @@ import collections
 import json
 import pandas as pd
 
-def detect_age(captions:list, 
+def detect_age_captions(captions:list, 
                keyword_list:list=['child ','little boy ','little girl ','small boy ','small girl ','infant ','toddler '], 
                adult_keywords:list = ['adult ','person ','woman ','man ']) -> str:
     """Detect age based on captions. There are usually multiple captions per image. 
@@ -36,9 +36,9 @@ def create_label_csv(type_input:str = 'train', jsonfile:str = '', capfile:str = 
         ages (list, optional): list of acceptable ages. Defaults to ["adult","child"].
     """
     
-    jsonfile = jsonfile if len(jsonfile) > 0 else f"./annotations_trainval2017/annotations/person_keypoints_{type_input}2017.json"
-    capfile = capfile if len(jsonfile) > 0 else f"./annotations_trainval2017/annotations/captions_{type_input}2017.json"
-    out_path = out_path if len(jsonfile) > 0 else f"./label_coco_{type_input}.csv"
+    jsonfile = jsonfile if len(jsonfile) > 0 else f"./data/person_keypoints_{type_input}2017.json"
+    capfile = capfile if len(capfile) > 0 else f"./data/captions_{type_input}2017.json"
+    out_path = out_path if len(out_path) > 0 else f"./data/label_coco_{type_input}.csv"
 
     results = []
 
@@ -63,7 +63,7 @@ def create_label_csv(type_input:str = 'train', jsonfile:str = '', capfile:str = 
             data[key]['captions'].append(item['caption'])
 
     for _,p in data.items():    
-        age = detect_age(p['captions'])
+        age = detect_age_captions(p['captions'])
         if age not in ages:
             continue
         row = {

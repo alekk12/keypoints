@@ -20,21 +20,28 @@ def midpoint(p1:tuple, p2:tuple)->tuple:
 
 def z_score(data, th:float=0.3, win_size:int=3):
     """Smooth the keypoints if confidence of detection is less than th.
-    Smooth over win_size windows (except the one with poor detection)
+    Smooth over win_size windows (except the one with poor detection).
+    Each detection has 17 keypoints or is filled with 0 to have it
     
 
     Args:
-        data (_type_): _description_
-        th (float, optional): _description_. Defaults to 0.3.
-        win_size (int, optional): _description_. Defaults to 3.
+        data (_type_): input keypoints data
+        th (float, optional): threshold. Defaults to 0.3.
+        win_size (int, optional): window length. Defaults to 3.
 
     Returns:
-        _type_: _description_
+        _type_: smoothed data
     """
+    if win_size < 3:
+        print("Window not long enough for smoothing")
+        return data
+
     n = len(data)
     half = win_size//2
     for i in range(0, n):
         slices = list(range(max(0,i-half),min(n,i+half+1)))
+        if len(slices) < 2:
+            continue
         slices.remove(i)
         curr = data[i]['keypoints']
         for idx in range(0,len(curr),3):
@@ -169,16 +176,16 @@ def calculate_ratios(kpts)->dict:
     }
 
 def class_ranges(sw2t:float, s2h:float, h2th:float,f2t:float)->str:
-    """Determine
+    """Determine class based on ratio
 
     Args:
-        sw2t (float): _description_
-        s2h (float): _description_
-        h2th (float): _description_
-        f2t (float): _description_
+        sw2t (float): shoulder width to torso diagonal ratio
+        s2h (float):shoulder to hip ratio
+        h2th (float):hip to torso height ratio
+        f2t (float):femur to torso diagonal ratio
 
     Returns:
-        str: _description_
+        str: class adult|child|ambigous
     """
     ch = (
         0.0 <= sw2t <= 0.970 and
@@ -200,8 +207,15 @@ def class_ranges(sw2t:float, s2h:float, h2th:float,f2t:float)->str:
     else:
         return 'ambigous'
 
-def classify_body(ratios):
-    """ Child vs Adult, ambigous if other"""
+def classify_body(ratios:dict)->str:    
+    """ Child vs Adult, ambigous if other
+    
+    Args:
+        ratios (dict): dictionary with all ratios
+
+    Returns:
+        str: 'adult'|'child'|''
+    """
     s2h = ratios["shoulder_hip_ratio"]
     sw2t = ratios["shoulder_width_to_torso_ratio"]
     h2th = ratios["hip_width_to_torso_height_ratio"]
@@ -227,15 +241,17 @@ def describe_iqr(df:pd.DataFrame, gr_col:list)->pd.DataFrame:
         return desc
     return df.groupby(gr_col).apply(_describe)
 
-#input_dir = "./MMU GAG Dataset/Gait in the Wild Dataset/"
-input_dir = "./MMU GAG Dataset/Self-Collected Dataset/"
-json_files = [os.path.join(input_dir,f) for f in os.listdir(input_dir)]
+def detect_age_captions_mmu(f:str)->str:
+    """Detect age bases on captions in mmu
 
-ages = ["adult","child"]
+    Args:
+        f (str): filename
 
-def detect_age(f):
+    Returns:
+        str: 'adult'|'child'|''
+    """
     real = 0
-    age = None
+    age = 'ambigous'
     if f.startswith('subject'):
         real = int(f.split('_')[3])
     elif f.startswith('alphapose_'):
@@ -248,34 +264,41 @@ def detect_age(f):
         age = 'child'
     return age
 
-results = []
-th = 0.3
-win_len = 3
-n = len(json_files)
-for p in json_files:
-    with open(p, "r") as f:
-        data = json.load(f)
-    data = z_score(data, th,win_len)
-    filename = p.lower().split("/")[-1].replace('.json','').replace('.mp4','')
-    age = detect_age(filename)
-    if age not in ages:
-        continue
-    for ann in data:
-        kpts = ann["keypoints"]
-        row = calculate_ratios(kpts)
-        if row is not None: #exclude missing
-            label = classify_body(row)
-            row.update({
-                "age": age,
-                "filename_id": filename,
-                "image_id": ann["image_id"],
-                "label": label,
-                "label_matches_age" : age == label
-            })
-            results.append(row)
+if __name__ == "main":
+    input_dir = "./data/MMU GAG Dataset/Gait in the Wild Dataset/"
+    input_dir = "./data/MMU GAG Dataset/Self-Collected Dataset/"
+    json_files = [os.path.join(input_dir,f) for f in os.listdir(input_dir)]
 
-df = pd.DataFrame(results)
-print(df['label_matches_age'].value_counts())
-df.to_csv(f"./label_scd_{th}_{win_len}.csv",index=False)
-df = describe_iqr(df,['age']).reset_index(level=1).round(3)
-df.to_csv(f"./ratios_scd_{th}_{win_len}.csv",index=False)
+    ages = ["adult","child"]
+
+    results = []
+    th = 0.3
+    win_len = 3
+    n = len(json_files)
+    for p in json_files:
+        with open(p, "r") as f:
+            data = json.load(f)
+        data = z_score(data, th,win_len)
+        filename = p.lower().split("/")[-1].replace('.json','').replace('.mp4','')
+        age = detect_age_captions_mmu(filename)
+        if age not in ages:
+            continue
+        for ann in data:
+            kpts = ann["keypoints"]
+            row = calculate_ratios(kpts)
+            if row is not None: #exclude missing
+                label = classify_body(row)
+                row.update({
+                    "age": age,
+                    "filename_id": filename,
+                    "image_id": ann["image_id"],
+                    "label": label,
+                    "label_matches_age" : age == label
+                })
+                results.append(row)
+
+    df = pd.DataFrame(results)
+    print(df['label_matches_age'].value_counts())
+    df.to_csv(f"./data/label_scd_{th}_{win_len}.csv",index=False)
+    df = describe_iqr(df,['age']).reset_index(level=1).round(3)
+    df.to_csv(f"./data/ratios_scd_{th}_{win_len}.csv",index=False)
