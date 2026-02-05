@@ -1,0 +1,11 @@
+torch>=2.0.0 
+torchvision>=0.15.0 
+numpy>=1.23 
+pandas>=1.5 
+Pillow>=9.0 
+opencv-python>=4.7 
+ultralytics>=8.0.0 
+scikit-learn>=1.1 
+optuna>=3.0 
+matplotlib>=3.5 
+tqdm>=4.64
